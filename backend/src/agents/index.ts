@@ -179,17 +179,32 @@ function getAgentConfig(agentType: string) {
 function getModel(dbConfig: any) {
   const textConfig = getTextConfig()
   const resolvedBaseURL = getTextProviderBaseUrl(textConfig)
+  const rawModel = dbConfig?.model || textConfig.model
+  const isDeepseek = textConfig.provider.toLowerCase() === 'deepseek'
+  const modelName = isDeepseek ? 'deepseek-chat' : rawModel
   logTaskProgress('AIConfig', 'text-model-endpoint', {
     provider: textConfig.provider,
     baseUrl: resolvedBaseURL,
-    model: dbConfig?.model || textConfig.model,
+    model: modelName,
+    rawModel,
   })
-  const provider = createOpenAI({
+  const openaiProvider = createOpenAI({
     baseURL: resolvedBaseURL,
     apiKey: textConfig.apiKey,
+    ...(isDeepseek ? {
+      fetch: async (url: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+        if (init?.body && typeof init.body === 'string') {
+          try {
+            const body = JSON.parse(init.body)
+            body.thinking = { type: 'disabled' }
+            return fetch(url, { ...init, body: JSON.stringify(body) })
+          } catch { /* ignore parse errors */ }
+        }
+        return fetch(url, init)
+      },
+    } : {}),
   } as any)
-  const modelName = dbConfig?.model || textConfig.model
-  return provider.chat(modelName)
+  return openaiProvider.chat(modelName)
 }
 
 export function createAgent(type: string, episodeId: number, dramaId: number): Agent | null {
