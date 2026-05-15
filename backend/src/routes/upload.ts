@@ -15,7 +15,7 @@ app.post('/image', async (c) => {
 
   const buffer = await file.arrayBuffer()
   const path = await saveUploadedFile(buffer, 'uploads', file.name)
-  return success(c, { url: `/${path}`, path })
+  return success(c, { url: path, path })
 })
 
 export default app

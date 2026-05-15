@@ -59,11 +59,27 @@ export const storyboardAPI = {
   del: (id: number) => api.del(`/storyboards/${id}`),
 }
 
+export const uploadAPI = {
+  image: async (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    const resp = await fetch(`${BASE}/upload/image`, { method: 'POST', body: form })
+    const json = await resp.json()
+    if (!resp.ok || (json.code && json.code >= 400)) throw new Error(json.message || `${resp.status}`)
+    return json.data ?? json
+  },
+}
+
 export const characterAPI = {
   update: (id: number, data: any) => api.put(`/characters/${id}`, data),
   voiceSample: (id: number, episodeId: number) => api.post(`/characters/${id}/generate-voice-sample`, { episode_id: episodeId }),
   generateImage: (id: number, episodeId: number) => api.post(`/characters/${id}/generate-image`, { episode_id: episodeId }),
   batchImages: (ids: number[], episodeId: number) => api.post('/characters/batch-generate-images', { character_ids: ids, episode_id: episodeId }),
+  uploadImage: async (id: number, file: File) => {
+    const { url } = await uploadAPI.image(file)
+    await api.put(`/characters/${id}`, { image_url: url })
+    return url
+  },
 }
 
 export const sceneAPI = {

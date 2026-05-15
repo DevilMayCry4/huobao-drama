@@ -755,9 +755,9 @@
                 <div class="asset-cover">
                   <img
                     v-if="c.image_url || c.imageUrl"
-                    :src="'/' + (c.image_url || c.imageUrl)"
+                    :src="('/' + (c.image_url || c.imageUrl)).replace(/\/+/g, '/')"
                     class="previewable-image"
-                    @click.stop="openImageViewer('/' + (c.image_url || c.imageUrl), `${c.name} 角色形象`)"
+                    @click.stop="openImageViewer(('/' + (c.image_url || c.imageUrl)).replace(/\/+/g, '/'), `${c.name} 角色形象`)"
                   />
                   <div v-else class="asset-cover-empty">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -771,10 +771,21 @@
                 <div class="asset-foot">
                   <span :class="['dot', (c.image_url || c.imageUrl) && 'ok', isPendingCharImage(c.id) && 'pending']" />
                   <span class="dim" style="font-size:10px">{{ (c.image_url || c.imageUrl) ? '已生成' : (isPendingCharImage(c.id) ? '生成中' : '待生成') }}</span>
+                  <button class="btn btn-sm" :disabled="uploadingCharIds.includes(c.id)" @click="triggerCharUpload(c.id)">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    {{ uploadingCharIds.includes(c.id) ? '上传中' : '上传' }}
+                  </button>
                   <button class="btn btn-sm ml-auto" :disabled="isPendingCharImage(c.id)" @click="genCharImg(c.id)">{{ isPendingCharImage(c.id) ? '生成中' : '生成' }}</button>
                 </div>
               </div>
             </div>
+            <input
+              type="file"
+              accept="image/*"
+              style="display:none"
+              ref="charFileInput"
+              @change="onCharFileSelected"
+            />
           </div>
 
           <!-- Sub: Scenes -->
@@ -1440,7 +1451,7 @@ import { toast } from 'vue-sonner'
 import {
   Users, MapPin, Video, ImageIcon, Layers, Mic2, FileText, FolderKanban, Clapperboard, Download,
 } from 'lucide-vue-next'
-import { dramaAPI, episodeAPI, storyboardAPI, characterAPI, sceneAPI, imageAPI, videoAPI, composeAPI, mergeAPI, gridAPI, aiConfigAPI, voicesAPI } from '~/composables/useApi'
+import { dramaAPI, episodeAPI, storyboardAPI, characterAPI, sceneAPI, imageAPI, videoAPI, composeAPI, mergeAPI, gridAPI, aiConfigAPI, voicesAPI, uploadAPI } from '~/composables/useApi'
 import { useAgent } from '~/composables/useAgent'
 import BaseSelect from '~/components/BaseSelect.vue'
 
@@ -2503,6 +2514,36 @@ async function genCharImg(id) {
   } catch (e) {
     pendingCharImageIds.value = pendingCharImageIds.value.filter(item => item !== id)
     toast.error(e.message)
+  }
+}
+
+const uploadingCharIds = ref([])
+const charFileInput = ref(null)
+const pendingUploadCharId = ref(null)
+
+function triggerCharUpload(id) {
+  pendingUploadCharId.value = id
+  if (charFileInput.value) charFileInput.value.click()
+}
+
+async function onCharFileSelected(event) {
+  const target = event.target
+  const file = target.files && target.files[0]
+  const id = pendingUploadCharId.value
+  if (!file || !id) return
+  if (!file.type.startsWith('image/')) { toast.error('请选择图片文件'); target.value = ''; return }
+  uploadingCharIds.value = [...uploadingCharIds.value, id]
+  try {
+    const { url } = await uploadAPI.image(file)
+    await characterAPI.update(id, { image_url: url })
+    toast.success('角色形象上传成功')
+    await refresh()
+  } catch (e) {
+    toast.error(e.message || '上传失败')
+  } finally {
+    uploadingCharIds.value = uploadingCharIds.value.filter(i => i !== id)
+    pendingUploadCharId.value = null
+    target.value = ''
   }
 }
 function batchCharImages() {
